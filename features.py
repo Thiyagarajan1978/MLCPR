@@ -66,16 +66,8 @@ def build_features(df):
 
     # session_gap_pct: (today open - yesterday close) / yesterday close
     # Positive = gap up (bullish regime), Negative = gap down (bearish regime)
-    daily_open  = df.groupby(timestamps.date)["open"].transform("first")
-    daily_close = df["close"].copy()
-    # Shift by one full day: align each bar to prior day's last close
-    prev_day_close = (
-        df["close"]
-        .groupby(timestamps.date)
-        .last()
-        .shift(1)
-    )
-    # Map prior day close back onto every intraday bar
+    daily_open     = df.groupby(timestamps.date)["open"].transform("first")
+    prev_day_close = df["close"].groupby(timestamps.date).last().shift(1)
     date_to_prev_close = prev_day_close.to_dict()
     df["session_gap_pct"] = [
         (daily_open.iloc[i] - date_to_prev_close.get(timestamps[i].date(), float("nan")))
@@ -83,5 +75,53 @@ def build_features(df):
         if timestamps[i].date() in date_to_prev_close else float("nan")
         for i in range(len(df))
     ]
+
+    # --- Phase C: Prior-day regime features ---
+    # All backward-looking (prior session data only) — no leakage.
+    # Teaches the model that SHORT setups only work in bearish-regime days.
+    if "cpr_bottom" in df.columns and "cpr_top" in df.columns:
+        ts           = pd.DatetimeIndex(df.index)
+        unique_dates = sorted(set(t.date() for t in ts))
+
+        # Build per-day summary from intraday bars
+        daily_info = {}
+        for d in unique_dates:
+            day_mask = [t.date() == d for t in ts]
+            day_df   = df[day_mask]
+            daily_info[d] = {
+                "last_close":    float(day_df["close"].iloc[-1]),
+                "pp":            float(day_df["pp"].iloc[0]),
+                "cpr_top":       float(day_df["cpr_top"].iloc[0]),
+                "cpr_bottom":    float(day_df["cpr_bottom"].iloc[0]),
+                "pct_above_cpr": float((day_df["close"] > day_df["cpr_top"]).mean()),
+                "pct_below_cpr": float((day_df["close"] < day_df["cpr_bottom"]).mean()),
+            }
+
+        # Derive features relative to prior session
+        regime_by_date = {}
+        for i, d in enumerate(unique_dates):
+            if i == 0:
+                continue
+            prev = daily_info[unique_dates[i - 1]]
+            curr = daily_info[d]
+            # Where did prior day close vs its own CPR?
+            if prev["last_close"] > prev["cpr_top"]:
+                regime = 1.0    # bullish close (price above CPR)
+            elif prev["last_close"] < prev["cpr_bottom"]:
+                regime = -1.0   # bearish close (price below CPR)
+            else:
+                regime = 0.0    # neutral (closed inside CPR band)
+
+            regime_by_date[d] = {
+                "prior_day_regime":    regime,
+                "pp_rising":           1.0 if curr["pp"] > prev["pp"] else 0.0,
+                "prior_pct_above_cpr": prev["pct_above_cpr"],
+                "prior_pct_below_cpr": prev["pct_below_cpr"],
+            }
+
+        bar_dates_c = [t.date() for t in ts]
+        for col in ["prior_day_regime", "pp_rising",
+                    "prior_pct_above_cpr", "prior_pct_below_cpr"]:
+            df[col] = [regime_by_date.get(d, {}).get(col, float("nan")) for d in bar_dates_c]
 
     return df.dropna()

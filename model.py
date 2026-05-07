@@ -17,3 +17,21 @@ def train_calibrated(X, y):
     model = CalibratedClassifierCV(base, cv=2, method="isotonic")
     model.fit(X, y)
     return model
+
+
+def train_long_short(X_long, y_long, X_short, y_short):
+    """Two separate calibrated models — one per trade direction.
+
+    Splitting by direction prevents the bullish-period training data from
+    suppressing SHORT signal confidence across the board.
+    """
+    def _cal_rf():
+        base = RandomForestClassifier(n_estimators=150, random_state=42,
+                                      class_weight="balanced")
+        return CalibratedClassifierCV(base, cv=2, method="isotonic")
+
+    long_model  = _cal_rf()
+    short_model = _cal_rf()
+    long_model.fit(X_long,  y_long)
+    short_model.fit(X_short, y_short)
+    return long_model, short_model

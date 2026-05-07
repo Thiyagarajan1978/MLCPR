@@ -5,13 +5,11 @@ from datetime import date
 from data_loader import load_data
 from features import build_features
 
-# Buffer added/subtracted from CPR level for stop placement
-_STOP_BUFFER = 0.10
-
 
 def predict_today(model_path="model.pkl", data_path="data.csv", symbol="TSLA"):
     payload      = joblib.load(model_path)
-    model        = payload["model"]
+    long_model   = payload["long_model"]
+    short_model  = payload["short_model"]
     feature_cols = payload["feature_cols"]
 
     df = load_data(data_path)
@@ -26,7 +24,6 @@ def predict_today(model_path="model.pkl", data_path="data.csv", symbol="TSLA"):
         print("No data found for the most recent trading day.")
         return []
 
-    # Only score bars that are actual CPR trade setups
     def _is_long(row):
         return row.get("below_cpr", 0) == 1 or row.get("cpr_bottom_reclaim", 0) == 1
 
@@ -40,12 +37,25 @@ def predict_today(model_path="model.pkl", data_path="data.csv", symbol="TSLA"):
         print("No CPR trade setups found for today (all bars inside CPR).")
         return []
 
-    setup_df = today_df.loc[[idx for idx, _ in setup_rows]]
-    X_today  = setup_df[feature_cols]
-    proba    = model.predict_proba(X_today)
+    # Score LONG and SHORT bars through their respective models
+    long_indices  = [idx for idx, row in setup_rows if _is_long(row)]
+    short_indices = [idx for idx, row in setup_rows if _is_short(row)]
+
+    long_proba  = {}
+    short_proba = {}
+
+    if long_indices:
+        X_long = today_df.loc[long_indices, feature_cols]
+        p      = long_model.predict_proba(X_long)
+        long_proba = {idx: p[i][1] for i, idx in enumerate(long_indices)}
+
+    if short_indices:
+        X_short = today_df.loc[short_indices, feature_cols]
+        p       = short_model.predict_proba(X_short)
+        short_proba = {idx: p[i][1] for i, idx in enumerate(short_indices)}
 
     signals = []
-    for i, (idx, row) in enumerate(setup_rows):
+    for idx, row in setup_rows:
         entry     = round(float(row["close"]), 2)
         cpr_top   = round(float(row["cpr_top"]), 2)
         cpr_bot   = round(float(row["cpr_bottom"]), 2)
@@ -56,26 +66,28 @@ def predict_today(model_path="model.pkl", data_path="data.csv", symbol="TSLA"):
         #   position bar (below/above CPR) → near boundary first
         #   cross event (reclaim/reject)   → far boundary (full traverse)
         is_reclaim = row.get("cpr_bottom_reclaim", 0) == 1
-        is_reject  = row.get("cpr_top_reject", 0) == 1
+        is_reject  = row.get("cpr_top_reject",     0) == 1
         if direction == "LONG":
-            stop   = round(entry * 0.995, 2)
-            target = cpr_top if is_reclaim else cpr_bot
+            stop       = round(entry * 0.995, 2)
+            target     = cpr_top if is_reclaim else cpr_bot
+            confidence = long_proba.get(idx, 0.0)
         else:
-            stop   = round(entry * 1.005, 2)
-            target = cpr_bot if is_reject else cpr_top
+            stop       = round(entry * 1.005, 2)
+            target     = cpr_bot if is_reject else cpr_top
+            confidence = short_proba.get(idx, 0.0)
 
         risk   = abs(entry - stop)
         reward = abs(target - entry)
         rr     = round(reward / risk, 1) if risk > 0 else 0
 
         signals.append({
-            "time":      idx.strftime("%H:%M"),
-            "direction": direction,
-            "entry":     entry,
-            "stop":      stop,
-            "target":    target,
-            "rr":        rr,
-            "confidence": proba[i][1],   # P(CPR target reached)
+            "time":       idx.strftime("%H:%M"),
+            "direction":  direction,
+            "entry":      entry,
+            "stop":       stop,
+            "target":     target,
+            "rr":         rr,
+            "confidence": confidence,
         })
 
     return signals
@@ -91,7 +103,7 @@ def print_signals(signals, symbol="TSLA", min_conf=0.60):
     high     = [s for s in signals if s["confidence"] >= min_conf]
 
     print(f"\n{sep}")
-    print(f"  PHASE B  CPR TRADE SIGNALS - {symbol}  |  {today}")
+    print(f"  PHASE C  CPR TRADE SIGNALS - {symbol}  |  {today}")
     print(f"  Confidence = P(price reaches CPR target within 10 bars)")
     print(sep)
     print(f"{'Time':<7} {'Dir':<6} {'Entry':>8} {'Stop':>8} {'Target':>8} "
