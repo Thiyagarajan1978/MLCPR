@@ -50,19 +50,21 @@ def build_features(df):
     # --- Phase B: Time-of-day and session regime features ---
     timestamps = pd.DatetimeIndex(df.index)
 
-    # bars_since_open: count of bars elapsed since 09:30 each day
+    # bars_since_open: hourly bars elapsed since 09:30
+    # Regular session = 7 bars (09:30, 10:30, 11:30, 12:30, 13:30, 14:30, 15:30)
     session_start_minutes = 9 * 60 + 30   # 570 minutes from midnight
-    bar_minutes = timestamps.hour * 60 + timestamps.minute
-    df["bars_since_open"] = (bar_minutes - session_start_minutes) // 5
+    # Use pd.Series so .clip() and boolean ops work correctly
+    bar_minutes = pd.Series(
+        timestamps.hour * 60 + timestamps.minute, index=df.index, dtype=int
+    )
+    df["bars_since_open"] = ((bar_minutes - session_start_minutes) // 60).clip(0, 6)
 
-    # Normalised position in session: 0.0 = open (09:30), 1.0 = close (16:00)
-    # Regular session = 390 minutes = 78 bars of 5 min
-    session_total_bars = 78
-    df["time_of_day"] = (df["bars_since_open"] / session_total_bars).clip(0.0, 1.0)
+    session_total_bars = 7
+    df["time_of_day"] = (df["bars_since_open"] / (session_total_bars - 1)).clip(0.0, 1.0)
 
     # Binary session-window flags
-    df["first_hour"] = ((bar_minutes >= 570) & (bar_minutes < 630)).astype(int)   # 09:30-10:30
-    df["last_hour"]  = ((bar_minutes >= 900) & (bar_minutes < 960)).astype(int)   # 15:00-16:00
+    df["first_hour"] = (bar_minutes == 570).astype(int)   # 09:30 bar only
+    df["last_hour"]  = (bar_minutes >= 870).astype(int)   # 14:30 and 15:30 bars
 
     # session_gap_pct: (today open - yesterday close) / yesterday close
     # Positive = gap up (bullish regime), Negative = gap down (bearish regime)

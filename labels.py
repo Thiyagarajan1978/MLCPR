@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def create_cpr_labels(df, horizon=10):
+def create_cpr_labels(df, horizon=4):
     """
     CPR-target labels — encodes the actual trade objective.
 

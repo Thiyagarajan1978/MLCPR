@@ -3,30 +3,33 @@ import pandas as pd
 from cpr_levels import add_cpr_to_intraday
 
 
-def fetch_and_save(symbol="TSLA", period="60d", interval="5m", output="data.csv"):
+def fetch_and_save(symbol="TSLA", period="730d", interval="1h", output="data.csv"):
     ticker = yf.Ticker(symbol)
 
-    # --- 5m intraday data (yfinance allows 60 days — 8x more training data than 1m/7d) ---
-    print(f"Downloading {symbol} 5m intraday data (last {period})...")
+    # 1h bars — yfinance allows up to 730 days at this resolution (vs 60 days at 5m)
+    print(f"Downloading {symbol} 1h intraday data (last {period})...")
     df = ticker.history(period=period, interval=interval, auto_adjust=True)
     if df.empty:
         raise ValueError(f"No intraday data returned for {symbol}. Market may be closed.")
 
-    df_5m = df.between_time("09:30", "15:55")  # last 5m bar starts at 15:55
-    df_5m.index.name = "time"
-    df_5m.columns = [c.lower() for c in df_5m.columns]
-    df_5m = df_5m[["open", "high", "low", "close", "volume"]]
-    df_3m = df_5m  # alias — keeping variable name consistent with rest of pipeline
+    # Regular session only: 09:30, 10:30, 11:30, 12:30, 13:30, 14:30, 15:30 (7 bars/day)
+    df_1h = df.between_time("09:30", "15:30")
+    df_1h.columns = [c.lower() for c in df_1h.columns]
+    df_1h = df_1h[["open", "high", "low", "close", "volume"]]
+    # Strip timezone → naive Eastern Time so CSV timestamps are always "HH:MM" as seen on chart
+    if df_1h.index.tz is not None:
+        df_1h.index = df_1h.index.tz_convert("America/New_York").tz_localize(None)
+    df_1h.index.name = "time"
 
-    # --- Daily data for CPR level calculation ---
+    # Daily data for CPR calculation — need 2y to cover all intraday dates
     print(f"Downloading {symbol} daily data for CPR pivot levels...")
-    daily = ticker.history(period="30d", interval="1d", auto_adjust=True)
+    daily = ticker.history(period="2y", interval="1d", auto_adjust=True)
     if daily.empty:
         raise ValueError(f"No daily data returned for {symbol}.")
 
-    # Merge prior-day CPR levels into every 3-min bar
-    df_3m = add_cpr_to_intraday(df_3m, daily)
+    df_1h = add_cpr_to_intraday(df_1h, daily)
 
-    df_3m.to_csv(output)
-    print(f"Saved {len(df_3m)} 3-min bars with CPR levels [{df_3m.index[0].date()} to {df_3m.index[-1].date()}]")
-    return df_3m
+    df_1h.to_csv(output)
+    print(f"Saved {len(df_1h)} 1h bars with CPR levels "
+          f"[{df_1h.index[0].date()} to {df_1h.index[-1].date()}]")
+    return df_1h
