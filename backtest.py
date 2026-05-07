@@ -179,7 +179,7 @@ def print_threshold_sweep(signals, test_days):
     print()
 
 
-def print_daily_log(signals, min_conf=0.55, min_rr=1.0):
+def print_daily_log(signals, min_conf=0.50, min_rr=1.0):
     """Per-day table and full trade log at chosen threshold + R:R filter."""
     if not signals:
         print("No signals.")
@@ -255,4 +255,4 @@ if __name__ == "__main__":
         test_days = len(set(s["date"] for s in sigs))
         print_threshold_sweep(sigs, test_days)
         # Show best threshold results: 55% confidence + 1.0x R:R
-        print_daily_log(sigs, min_conf=0.55, min_rr=1.0)
+        print_daily_log(sigs, min_conf=0.50, min_rr=1.0)

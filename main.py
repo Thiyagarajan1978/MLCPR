@@ -68,4 +68,4 @@ else:
 
 print("\nGenerating today's CPR trade signals...")
 signals = predict_today(model_path="model.pkl", data_path="data.csv", symbol=SYMBOL)
-print_signals(signals, symbol=SYMBOL, min_conf=0.60)
+print_signals(signals, symbol=SYMBOL, min_conf=0.50)
