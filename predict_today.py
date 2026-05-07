@@ -91,7 +91,7 @@ def print_signals(signals, symbol="TSLA", min_conf=0.60):
     high     = [s for s in signals if s["confidence"] >= min_conf]
 
     print(f"\n{sep}")
-    print(f"  PHASE A  CPR TRADE SIGNALS - {symbol}  |  {today}")
+    print(f"  PHASE B  CPR TRADE SIGNALS - {symbol}  |  {today}")
     print(f"  Confidence = P(price reaches CPR target within 10 bars)")
     print(sep)
     print(f"{'Time':<7} {'Dir':<6} {'Entry':>8} {'Stop':>8} {'Target':>8} "
