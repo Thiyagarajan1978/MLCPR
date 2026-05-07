@@ -41,7 +41,7 @@ def build_features(df):
         df["cpr_top_reject"]     = ((prev > df["cpr_top"]) &
                                     (df["close"] < df["cpr_top"])).astype(int)
 
-        # Drop raw pivot price columns — absolute levels overfit and don't generalise
-        df = df.drop(["pp", "cpr_top", "cpr_bottom", "r1", "r2", "s1", "s2", "cpr_width"], axis=1)
+        # Raw pivot price columns are kept here — labels.py needs cpr_top/cpr_bottom
+        # to compute CPR-target labels. main.py and walk_forward.py exclude them from X.
 
     return df.dropna()

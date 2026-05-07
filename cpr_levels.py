@@ -3,21 +3,24 @@ import pandas as pd
 
 def compute_cpr(high, low, close):
     pp = (high + low + close) / 3
-    bc = (high + low) / 2          # Bottom Central Pivot (CPR Bottom)
-    tc = (2 * pp) - bc             # Top Central Pivot (CPR Top)
+    bc = (high + low) / 2          # Bottom Central Pivot
+    tc = (2 * pp) - bc             # Top Central Pivot
+    # When close < midpoint, tc < bc (inverted CPR). Always keep top > bottom.
+    cpr_top    = round(max(tc, bc), 4)
+    cpr_bottom = round(min(tc, bc), 4)
     r1 = (2 * pp) - low
     r2 = pp + (high - low)
     s1 = (2 * pp) - high
     s2 = pp - (high - low)
     return {
         "pp":         round(pp, 4),
-        "cpr_top":    round(tc, 4),
-        "cpr_bottom": round(bc, 4),
+        "cpr_top":    cpr_top,
+        "cpr_bottom": cpr_bottom,
         "r1":         round(r1, 4),
         "r2":         round(r2, 4),
         "s1":         round(s1, 4),
         "s2":         round(s2, 4),
-        "cpr_width":  round(tc - bc, 4),
+        "cpr_width":  round(cpr_top - cpr_bottom, 4),
     }
 
 
