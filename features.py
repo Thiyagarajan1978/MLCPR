@@ -44,7 +44,20 @@ def build_features(df):
         df["cpr_top_reject"]     = ((prev > df["cpr_top"]) &
                                     (df["close"] < df["cpr_top"])).astype(int)
 
-        # Raw pivot price columns are kept here — labels.py needs cpr_top/cpr_bottom
+        # Phase D — expanded signal universe
+        # CPR breakout: price exits CPR from inside (prev bar was inside CPR)
+        # These catch "inside-CPR" days that previously had zero signals.
+        # Target: R1 (up breakout) or S1 (down breakout) — the next pivot destination.
+        prev_inside = ((prev >= df["cpr_bottom"]) & (prev <= df["cpr_top"]))
+        df["cpr_top_breakout"] = (prev_inside & (df["close"] > df["cpr_top"])).astype(int)
+        df["cpr_bot_breakout"] = (prev_inside & (df["close"] < df["cpr_bottom"])).astype(int)
+
+        # S1/R1 mean-reversion flags: help model learn that S1 bounces and R1 rejects
+        # carry stronger momentum than ordinary below/above CPR bars.
+        df["s1_bounce"] = ((prev < df["s1"]) & (df["close"] >= df["s1"])).astype(int)
+        df["r1_reject"]  = ((prev > df["r1"]) & (df["close"] <= df["r1"])).astype(int)
+
+        # Raw pivot price columns are kept here — labels.py needs cpr_top/cpr_bottom/r1/s1
         # to compute CPR-target labels. main.py and walk_forward.py exclude them from X.
 
     # --- Phase B: Time-of-day and session regime features ---

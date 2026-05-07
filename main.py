@@ -31,8 +31,12 @@ exclude    = ["label"] + [c for c in OHLC + RAW_CPR if c in df_labeled.columns]
 X          = df_labeled.drop(columns=exclude)
 y          = df_labeled["label"]
 
-long_mask  = (df_labeled.get("below_cpr", 0) == 1) | (df_labeled.get("cpr_bottom_reclaim", 0) == 1)
-short_mask = (df_labeled.get("above_cpr",  0) == 1) | (df_labeled.get("cpr_top_reject",    0) == 1)
+long_mask  = ((df_labeled.get("below_cpr",        0) == 1) |
+              (df_labeled.get("cpr_bottom_reclaim", 0) == 1) |
+              (df_labeled.get("cpr_top_breakout",   0) == 1))
+short_mask = ((df_labeled.get("above_cpr",         0) == 1) |
+              (df_labeled.get("cpr_top_reject",     0) == 1) |
+              (df_labeled.get("cpr_bot_breakout",   0) == 1))
 X_long,  y_long  = X[long_mask],  y[long_mask]
 X_short, y_short = X[short_mask], y[short_mask]
 

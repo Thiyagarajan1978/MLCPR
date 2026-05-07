@@ -27,11 +27,15 @@ TRAIN_DAYS = 200   # ~9 months of trading days for training
 
 
 def _is_long(row):
-    return row.get("below_cpr", 0) == 1 or row.get("cpr_bottom_reclaim", 0) == 1
+    return (row.get("below_cpr",         0) == 1 or
+            row.get("cpr_bottom_reclaim", 0) == 1 or
+            row.get("cpr_top_breakout",   0) == 1)
 
 
 def _is_short(row):
-    return row.get("above_cpr", 0) == 1 or row.get("cpr_top_reject", 0) == 1
+    return (row.get("above_cpr",        0) == 1 or
+            row.get("cpr_top_reject",   0) == 1 or
+            row.get("cpr_bot_breakout", 0) == 1)
 
 
 def run_backtest(data_path="data.csv"):
@@ -95,16 +99,20 @@ def run_backtest(data_path="data.csv"):
             entry      = round(float(row["close"]), 2)
             cpr_top    = round(float(row["cpr_top"]), 2)
             cpr_bot    = round(float(row["cpr_bottom"]), 2)
+            r1         = round(float(row["r1"]), 2)
+            s1         = round(float(row["s1"]), 2)
             is_reclaim = row.get("cpr_bottom_reclaim", 0) == 1
             is_reject  = row.get("cpr_top_reject",     0) == 1
+            is_bkt_up  = row.get("cpr_top_breakout",   0) == 1
+            is_bkt_dn  = row.get("cpr_bot_breakout",   0) == 1
 
             if direction == "LONG":
                 stop   = round(entry * 0.995, 2)
-                target = cpr_top if is_reclaim else cpr_bot
+                target = r1 if is_bkt_up else (cpr_top if is_reclaim else cpr_bot)
                 conf   = long_proba.get(idx, 0.0)
             else:
                 stop   = round(entry * 1.005, 2)
-                target = cpr_bot if is_reject else cpr_top
+                target = s1 if is_bkt_dn else (cpr_bot if is_reject else cpr_top)
                 conf   = short_proba.get(idx, 0.0)
 
             risk   = abs(entry - stop)
