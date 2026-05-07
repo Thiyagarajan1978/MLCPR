@@ -21,10 +21,13 @@ df = build_features(df)
 print("Creating labels...")
 df_labeled = create_labels(df.copy())
 
-X = df_labeled.drop(["label"], axis=1)
+# Raw OHLC prices are absolute levels — they cause memorization, not generalisation.
+# Only derived / CPR-relative features go into the model.
+OHLC = ["open", "high", "low", "close", "volume"]
+X = df_labeled.drop(["label"] + OHLC, axis=1)
 y = df_labeled["label"]
 
-print(f"Dataset: {len(X)} bars | Features: {list(X.columns)}")
+print(f"Dataset: {len(X)} bars | Features ({len(X.columns)}): {list(X.columns)}")
 
 print("\nTraining model...")
 model = train(X, y)
@@ -41,4 +44,4 @@ print(f"Average : {avg:.1%}  ({'stable' if max(results) - min(results) < 0.15 el
 
 print("\nGenerating today's trade signals...")
 signals = predict_today(model_path="model.pkl", data_path="data.csv", symbol=SYMBOL)
-print_signals(signals, symbol=SYMBOL, min_conf=0.60)
+print_signals(signals, symbol=SYMBOL, min_conf=0.75)
